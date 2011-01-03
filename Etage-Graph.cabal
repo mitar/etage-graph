@@ -1,0 +1,22 @@
+Name:                Etage-Graph
+Version:             0.1
+Synopsis:            A data-flow based graph interface
+Description:         A data-flow based graph interface.
+License:             LGPL-3
+License-file:        LICENSE
+Author:              Mitar Milutinovic
+Maintainer:          mitar.haskell@tnode.com
+Copyright:           (c) 2011 Mitar Milutinovic
+Category:            Data Structures
+Build-type:          Simple
+Cabal-version:       >= 1.8
+Stability:           experimental
+Homepage:            http://mitar.tnode.com
+
+Library
+  Exposed-modules:     Data.Graph.Etage
+  Build-depends:       base >= 4.3 && < 5,
+                       Etage >= 0.1.5 && < 0.2,
+                       fgl >= 5.4.2 && < 5.5
+  HS-source-dirs:      lib
+  GHC-options:         -Wall
