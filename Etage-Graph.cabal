@@ -1,7 +1,7 @@
 Name:                Etage-Graph
 Version:             0.1
-Synopsis:            A data-flow based graph interface
-Description:         A data-flow based graph interface.
+Synopsis:            A data-flow based graph algorithms
+Description:         A data-flow based graph algorithms.
 License:             LGPL-3
 License-file:        LICENSE
 Author:              Mitar Milutinovic
@@ -16,7 +16,8 @@ Homepage:            http://mitar.tnode.com
 Library
   Exposed-modules:     Data.Graph.Etage
   Build-depends:       base >= 4.3 && < 5,
-                       Etage >= 0.1.5 && < 0.2,
-                       fgl >= 5.4.2 && < 5.5
+                       Etage >= 0.1.8 && < 0.2,
+                       fgl >= 5.4.2 && < 5.5,
+                       mtl >= 2.0 && < 3
   HS-source-dirs:      lib
   GHC-options:         -Wall
