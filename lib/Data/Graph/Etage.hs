@@ -16,7 +16,7 @@ import Control.Etage
 shortestPaths :: (DynGraph gr, Show a, Data a, Data b, Real b) => Node -> gr a b -> Incubation (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive)
 shortestPaths from graph = do
   ngraph <- gmapM' growGraph graph
-  return . fromJust $ lab ngraph from
+  return . fromJust $ lab ngraph from -- it is an error to try to get shortest paths to a nonexistent node
 
 growGraph :: forall a b. (Show a, Data a, Data b, Real b) => Context a b -> Incubation (Context (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive) (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
 growGraph (inn, node, label, out) = do
@@ -52,9 +52,15 @@ data GraphImpulse a b = Originator {
     impulseTimestamp :: ImpulseTime
   } deriving (Eq, Ord, Show, Typeable, Data)
 
-instance (Show a, Typeable a, Show b, Typeable b) => Impulse (GraphImpulse a b)
+instance (Show a, Typeable a, Show b, Typeable b, Real b) => Impulse (GraphImpulse a b) where
+  impulseTime Originator { impulseTimestamp } = impulseTimestamp
+  impulseTime TopologyChange { impulseTimestamp } = impulseTimestamp
+  impulseValue Originator { originator, paths } = (toRational o) : (concatMap value paths)
+    where (o, _) = originator
+          value (LP p) = concatMap (\(n, l) -> [toRational n, toRational l]) p
+  impulseValue TopologyChange {} = []
 
-instance (Show a, Data a, Show b, Data b) => Neuron (NodeNeuron a b) where
+instance (Show a, Data a, Show b, Data b, Real b) => Neuron (NodeNeuron a b) where
   type NeuronFromImpulse (NodeNeuron a b) = GraphImpulse a b
   type NeuronForImpulse (NodeNeuron a b) = GraphImpulse a b
   data NeuronOptions (NodeNeuron a b) = NodeOptions {
@@ -67,7 +73,7 @@ instance (Show a, Data a, Show b, Data b) => Neuron (NodeNeuron a b) where
 
 data EdgeNeuron a b = EdgeNeuron Edge b deriving (Typeable, Data)
 
-instance (Show a, Data a, Show b, Data b) => Neuron (EdgeNeuron a b) where
+instance (Show a, Data a, Show b, Data b, Real b) => Neuron (EdgeNeuron a b) where
   type NeuronFromImpulse (EdgeNeuron a b) = GraphImpulse a b
   type NeuronForImpulse (EdgeNeuron a b) = GraphImpulse a b
   data NeuronOptions (EdgeNeuron a b) = EdgeOptions {
@@ -76,7 +82,12 @@ instance (Show a, Data a, Show b, Data b) => Neuron (EdgeNeuron a b) where
 
   grow EdgeOptions { ledge = (node1, node2, weight) } = return $ EdgeNeuron (node1, node2) weight
   
-  live nerve (EdgeNeuron edge weight) = return ()
+  live nerve (EdgeNeuron edge weight) = forever $ do
+    i <- getForNeuron nerve
+    sendFromNeuron nerve $ case i of
+                             TopologyChange {} -> i
+                             Originator { impulseTimestamp, originator, paths } -> Originator { impulseTimestamp, originator, paths' }
+                               where paths' = map
 
 ufoldM' :: (Graph gr, Monad m) => (Context a b -> c -> m c) -> c -> gr a b -> m c
 ufoldM' f u g | isEmpty g = return u
