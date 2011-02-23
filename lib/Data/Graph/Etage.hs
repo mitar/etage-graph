@@ -5,45 +5,42 @@ module Data.Graph.Etage (
   shortestPaths
 ) where
 
-import Control.Applicative hiding (empty)
 import Control.Monad.Trans
 import Data.Data
-import Data.Graph.Inductive hiding (inn, inn', out, out', node')
+import Data.Graph.Inductive hiding (inn, inn', out, out', node', nodes)
 import Data.Graph.Inductive.Internal.RootPath
-import Data.Maybe
+import qualified Data.Map as M
+import Data.Map hiding (filter, map, empty)
+import Data.Tuple
 import Control.Etage
 
 shortestPaths :: (DynGraph gr, Show a, Data a, Data b, Real b) => Node -> gr a b -> Incubation (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive)
 shortestPaths from graph = do
-  ngraph <- gmapM' growGraph graph
-  return . fromJust $ lab ngraph from -- it is an error to try to get shortest paths to a nonexistent node
+  nodes <- ufoldM' growGraph M.empty graph
+  let n = nodes ! from -- it is an error to try to get shortest paths to a nonexistent node
+  sendTopologyChange n
+  return n
 
-growGraph :: forall a b. (Show a, Data a, Data b, Real b) => Context a b -> Incubation (Context (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive) (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
-growGraph (inn, node, label, out) = do
-  nodeNerve <- (growNeuron :: NerveBoth (NodeNeuron a b)) (\o -> o { lnode = (node, label) })
-  inn' <- concat <$> mapM (growEdge swap) inn
-  out' <- concat <$> mapM (growEdge id) out
-  mapM_ ((`attachTo` [TranslatableFor nodeNerve]) . fst) inn'
-  nodeNerve `attachTo` (map (TranslatableFor . fst) out')
-  sendTopologyChange nodeNerve
-  return (inn', node, nodeNerve, out')
-    where growEdge f (weight, node') | node' == node = return [] -- we do not grow loopbacks
-                                     | otherwise = do
-                                         edgeNerve <- (growNeuron :: NerveBoth (EdgeNeuron a b)) (\o -> o { ledge = f (node, node', weight) })
-                                         return [(edgeNerve, node')]
-          swap (n, n', w) = (n', n, w)
+growGraph :: forall a b. (Show a, Data a, Data b, Real b) => Context a b -> M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive) -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
+growGraph (inn, node, label, out) nodes = do
+  nodeNerve <- (growNeuron :: NerveBoth (NodeNeuron a b)) (\o -> o { lnode = (node, label), linedges = inn' })
+  mapM_ ((`attachTo` [TranslatableFor nodeNerve]) . (nodes !) . snd) inn'
+  nodeNerve `attachTo` map (TranslatableFor . (nodes !) . snd) out'
+  return $ insert node nodeNerve nodes
+    where inn' = filter ((node /=) . snd) $ inn -- we ignore loopbacks
+          out' = filter ((node /=) . snd) $ out -- we ignore loopbacks
 
 sendTopologyChange :: Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive -> Incubation ()
 sendTopologyChange nerve = liftIO $ do
   time <- getCurrentImpulseTime
   sendForNeuron nerve $ TopologyChange time
 
-data NodeNeuron a b = NodeNeuron Node a deriving (Typeable, Data)
+data NodeNeuron a b = NodeNeuron Node a (M.Map Node b) deriving (Typeable, Data)
 
 deriving instance Typeable1 LPath
 deriving instance Data a => Data (LPath a)
 
-data GraphImpulse a b = Originator {
+data GraphImpulse a b = TopologyUpdate {
     impulseTimestamp :: ImpulseTime,
     originator :: LNode a,
     paths :: LRTree b
@@ -53,9 +50,9 @@ data GraphImpulse a b = Originator {
   } deriving (Eq, Ord, Show, Typeable, Data)
 
 instance (Show a, Typeable a, Show b, Typeable b, Real b) => Impulse (GraphImpulse a b) where
-  impulseTime Originator { impulseTimestamp } = impulseTimestamp
+  impulseTime TopologyUpdate { impulseTimestamp } = impulseTimestamp
   impulseTime TopologyChange { impulseTimestamp } = impulseTimestamp
-  impulseValue Originator { originator, paths } = (toRational o) : (concatMap value paths)
+  impulseValue TopologyUpdate { originator, paths } = (toRational o) : (concatMap value paths)
     where (o, _) = originator
           value (LP p) = concatMap (\(n, l) -> [toRational n, toRational l]) p
   impulseValue TopologyChange {} = []
@@ -64,35 +61,22 @@ instance (Show a, Data a, Show b, Data b, Real b) => Neuron (NodeNeuron a b) whe
   type NeuronFromImpulse (NodeNeuron a b) = GraphImpulse a b
   type NeuronForImpulse (NodeNeuron a b) = GraphImpulse a b
   data NeuronOptions (NodeNeuron a b) = NodeOptions {
-      lnode :: LNode a
+      lnode :: LNode a,
+      linedges :: Adj b
     } deriving (Eq, Ord, Read, Show) -- TODO: Derive Data when it will work
 
-  grow NodeOptions { lnode = (node, label) } = return $ NodeNeuron node label
+  grow NodeOptions { lnode = (node, label), linedges } = return $ NodeNeuron node label linedges'
+    where linedges' = fromList . map swap $ linedges
   
-  live nerve (NodeNeuron node label) = return ()
-
-data EdgeNeuron a b = EdgeNeuron Edge b deriving (Typeable, Data)
-
-instance (Show a, Data a, Show b, Data b, Real b) => Neuron (EdgeNeuron a b) where
-  type NeuronFromImpulse (EdgeNeuron a b) = GraphImpulse a b
-  type NeuronForImpulse (EdgeNeuron a b) = GraphImpulse a b
-  data NeuronOptions (EdgeNeuron a b) = EdgeOptions {
-      ledge :: LEdge b
-    } deriving (Eq, Ord, Read, Show) -- TODO: Derive Data when it will work
-
-  grow EdgeOptions { ledge = (node1, node2, weight) } = return $ EdgeNeuron (node1, node2) weight
-  
-  live nerve (EdgeNeuron edge weight) = forever $ do
-    i <- getForNeuron nerve
-    sendFromNeuron nerve $ case i of
-                             TopologyChange {} -> i
-                             Originator { impulseTimestamp, originator, paths } -> Originator { impulseTimestamp, originator, paths' }
-                               where paths' = map
+  live nerve (NodeNeuron node label inedges) = return ()
 
 ufoldM' :: (Graph gr, Monad m) => (Context a b -> c -> m c) -> c -> gr a b -> m c
 ufoldM' f u g | isEmpty g = return u
               | otherwise = ufoldM' f u g' >>= \u' -> f c u'
                   where (c, g') = matchAny g
 
+{-
 gmapM' :: (DynGraph gr, Monad m) => (Context a b -> m (Context c d)) -> gr a b -> m (gr c d)
 gmapM' f = ufoldM' (\c u -> f c >>= \c' -> return $ c' & u) empty
+-}
+

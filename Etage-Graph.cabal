@@ -18,6 +18,7 @@ Library
   Build-depends:       base >= 4.3 && < 5,
                        Etage >= 0.1.8 && < 0.2,
                        fgl >= 5.4.2 && < 5.5,
-                       mtl >= 2.0 && < 3
+                       mtl >= 2.0 && < 3,
+                       containers >= 0.4 && < 1
   HS-source-dirs:      lib
   GHC-options:         -Wall
