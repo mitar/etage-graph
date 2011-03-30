@@ -116,7 +116,7 @@ run nerve (NodeNeuron node label) = forever $ do
           forM_ (toList paths) $ \(n, (l, p)) -> sendFromNeuron nerve TopologyUpdate { impulseTimestamp = t, originator = (node, label), destination = (n, l), path = p }
     TopologyUpdate { impulseTimestamp, originator = (o, _), destination = (d, l), path = (LP path, cost) } -> do
       liftIO $ do
-        assertIO $ cost == (sum . map snd $ path)
+        assertIO $ abs (cost - (sum . map snd $ path)) * 100000 < 1 -- we have to do compare it like that to account for approximate nature of float values
         assertIO $ (fst . last $ path) == d
       inn <- gets inedges
       if o `notMember` inn

@@ -15,7 +15,7 @@ import Data.Graph.Inductive hiding (nodes, edges)
 outputFilename :: String
 outputFilename = "out.dot"
 
-generateGraph :: Int -> IO (Gr Char Float)
+generateGraph :: Int -> IO (Gr Char Double)
 generateGraph size = do
   when (size < 1 || size > 26) $ throwIO $ AssertionFailed $ "Graph size out of bounds " ++ show size
   let nodes = zip [1..size] ['A'..]
