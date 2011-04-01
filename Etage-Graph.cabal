@@ -31,6 +31,7 @@ Executable test
   Build-depends:       base >= 4.3 && < 5,
                        fgl >= 5.4.2 && < 5.5,
                        random >= 1.0 && < 2,
+                       containers >= 0.4 && < 1,
                        Etage == 0.1.8,
                        Etage-Graph == 0.1
-  GHC-options:         -Wall
+  GHC-options:         -Wall -rtsopts
