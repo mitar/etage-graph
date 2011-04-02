@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, NamedFieldPuns #-}
+{-# LANGUAGE TypeFamilies, DeriveDataTypeable, NamedFieldPuns, BangPatterns #-}
 
 module Main (
   main
@@ -6,6 +6,7 @@ module Main (
 
 import Control.Applicative
 import Control.Monad
+import Control.DeepSeq
 import Control.Exception
 import Data.Data
 import Data.Graph.Etage
@@ -14,6 +15,7 @@ import Data.List
 import qualified Data.Map as M
 import Data.Map hiding (filter, map, empty, null, lookup, insert)
 import Data.Maybe
+import Data.Time.Clock.POSIX
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -77,7 +79,7 @@ generateGraph graphSize = do
 
 data TestNeuron a b = TestNeuron Node (Gr a b) deriving (Typeable)
 
-instance (Show a, Data a, Show b, Data b, Real b, Bounded b) => Neuron (TestNeuron a b) where
+instance (Show a, Data a, Show b, Data b, Real b, Bounded b, NFData b) => Neuron (TestNeuron a b) where
   type NeuronFromImpulse (TestNeuron a b) = NoImpulse
   type NeuronForImpulse (TestNeuron a b) = GraphImpulse a b
   data NeuronOptions (TestNeuron a b) = NodeOptions {
@@ -92,19 +94,33 @@ instance (Show a, Data a, Show b, Data b, Real b, Bounded b) => Neuron (TestNeur
 
   grow NodeOptions { sourceNode, graph } = return $ TestNeuron sourceNode graph
   
-  live nerve (TestNeuron sourceNode graph) = waitAndTest M.empty
-    where paths = fromList . map (\(LP (n@(node, len):nodes)) -> (node, (len, reverse . map fst $ n:nodes))) $ spTree sourceNode graph
-          waitAndTest currentPaths = do
+  live nerve (TestNeuron sourceNode graph) = do
+      before <- getPOSIXTime
+      let pathsLazy = fromList . map (\(LP (n@(node, len):nodes)) -> (node, (len, reverse . map fst $ n:nodes))) $ spTree sourceNode graph
+          !paths = pathsLazy `deepseq` pathsLazy
+      after <- getPOSIXTime
+      putStrLn $ "Standard search time: " ++ (show $ after - before)
+      before' <- getPOSIXTime
+      waitAndTest M.empty paths before'
+    where waitAndTest currentPaths paths before = do
             impulse <- getForNeuron nerve
             case impulse of
-              TopologyChange {}                                                 -> waitAndTest currentPaths
-              AddOutEdges {}                                                    -> waitAndTest currentPaths
+              TopologyChange {}                                                 -> waitAndTest currentPaths paths before
+              AddOutEdges {}                                                    -> waitAndTest currentPaths paths before
               TopologyUpdate { destination = (node, _), path = (LP path, len) } -> do
                 let currentPaths' = M.insert node (len, map fst path) currentPaths
-                    found = (fromIntegral . sum . map fromEnum . elems $ intersectionWith (\(l, p) (l', p') -> l == l' && p == p') paths currentPaths') / (fromIntegral $ size paths) :: Float
-                putStrLn $ "Found " ++ (printf "%.2f %%" (found * 100)) ++ " shortest paths."
-                when (found == 1.0) $ dissolving currentPaths'
-                waitAndTest currentPaths'
+                    found = (fromIntegral $ size currentPaths) / (fromIntegral $ size paths) :: Float
+                    found' = (fromIntegral $ size currentPaths') / (fromIntegral $ size paths) :: Float
+                    shortest = (fromIntegral . sum . map fromEnum . elems $ intersectionWith (\(l, p) (l', p') -> l == l' && p == p') paths currentPaths') / (fromIntegral $ size paths) :: Float
+                putStrLn $ "Found " ++ (printf "%.2f %%" (found' * 100)) ++ " paths and of those " ++ (printf "%.2f %%" (shortest * 100)) ++ " shortest."
+                when (found' == 1.0 && found' > found) $ do
+                  after <- getPOSIXTime
+                  putStrLn $ "Etage search time for all paths: " ++ (show $ after - before)
+                when (shortest == 1.0) $ do
+                  after <- getPOSIXTime
+                  putStrLn $ "Etage search time for shortest paths: " ++ (show $ after - before)
+                  dissolving currentPaths'
+                waitAndTest currentPaths' paths before
 
 main :: IO ()
 main = do
@@ -127,11 +143,13 @@ main = do
                             putStrLn $ "Reading graph from \"" ++ inputGraph ++ "\"."
                             [line1, line2] <- lines <$> (readFile inputGraph)
                             let g = mkGraph (read line1) (read line2)
+                            forceStrictGraph g
                             return (g, noNodes g)
                           _                            -> do
                             let GraphSize s = fromMaybe (GraphSize defaultGraphSize) $ find isGraphSize opts
                             putStrLn $ "Generating a random graph of size " ++ (show s) ++ "."
                             g <- generateGraph s
+                            forceStrictGraph g
                             return (g, s)
 
   case find isOutputGraph opts of
@@ -159,3 +177,6 @@ main = do
     nervePaths <- shortestPaths sourceNode graph
     
     nervePaths `attachTo` [TranslatableFor nerveTest]
+
+forceStrictGraph :: (NFData a, NFData b, Graph gr) => gr a b -> IO ()
+forceStrictGraph g = labNodes g `deepseq` labEdges g `deepseq` return ()
