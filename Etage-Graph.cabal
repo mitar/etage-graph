@@ -34,4 +34,4 @@ Executable test
                        containers >= 0.4 && < 1,
                        Etage == 0.1.8,
                        Etage-Graph == 0.1
-  GHC-options:         -Wall -rtsopts
+  GHC-options:         -Wall -rtsopts -threaded
