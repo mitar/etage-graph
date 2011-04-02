@@ -174,9 +174,11 @@ main = do
   
   incubate $ do
     nerveTest <- (growNeuron :: NerveOnlyFor (TestNeuron String Double)) (\o -> o { sourceNode, graph })
-    nervePaths <- shortestPaths sourceNode graph
+    pathsNerves <- shortestPaths graph
     
-    nervePaths `attachTo` [TranslatableFor nerveTest]
+    (pathsNerves ! sourceNode) `attachTo` [TranslatableFor nerveTest]
+    
+    sendTopologyChange pathsNerves
 
 forceStrictGraph :: (NFData a, NFData b, Graph gr) => gr a b -> IO ()
 forceStrictGraph g = labNodes g `deepseq` labEdges g `deepseq` return ()

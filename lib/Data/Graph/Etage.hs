@@ -3,6 +3,7 @@
 
 module Data.Graph.Etage (
   shortestPaths,
+  sendTopologyChange,
   GraphImpulse(..)
 ) where
 
@@ -19,11 +20,8 @@ import System.IO
 type SPath b = (LPath b, b)
 type SPaths a b = M.Map Node (a, SPath b) -- node is destination, last element of SPath
 
-shortestPaths :: (DynGraph gr, Show a, Data a, Data b, Real b, Bounded b) => Node -> gr a b -> Incubation (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive)
-shortestPaths from graph = do
-  nodes <- ufoldM' growGraph M.empty graph
-  sendTopologyChange nodes
-  return $ nodes ! from -- it is an error to try to get shortest paths to a nonexistent node
+shortestPaths :: (DynGraph gr, Show a, Data a, Data b, Real b, Bounded b) => gr a b -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
+shortestPaths graph = ufoldM' growGraph M.empty graph
 
 growGraph :: forall a b. (Show a, Data a, Data b, Real b, Bounded b) => Context a b -> M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive) -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
 growGraph (inn, node, label, out) nodes = do
