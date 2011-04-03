@@ -1,6 +1,11 @@
 {-# LANGUAGE TypeFamilies, MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables, TypeSynonymInstances, StandaloneDeriving, DeriveDataTypeable, NamedFieldPuns #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
+{-|
+Please read the "Control.Etage" framework documentation for general information how it works. Also check included @test@ program for
+an example of how to work with the algorithms bellow.
+-}
+
 module Data.Graph.Etage (
   shortestPaths,
   sendTopologyChange,
@@ -20,6 +25,20 @@ import System.IO
 type SPath b = (LPath b, b)
 type SPaths a b = M.Map Node (a, SPath b) -- node is destination, last element of SPath
 
+{-|
+Shortest paths algorithm (from all to all nodes) using message ('Impulse's in the "Control.Etage" terminology) passing between the
+nodes along the edges of the graph to compute shortest paths. Loosely based on the algorithm used in the Babel routing
+protocol, <http://www.pps.jussieu.fr/~jch/software/babel/>.
+
+It takes a "Data.Graph.Inductive" graph as an input and produces a map between source nodes and its corresponding 'Nerve's, over which
+'Impulse's about shortest paths search will be send. To trigger the search 'sendTopologyChange' should be used on returned 'Nerve's.
+
+One way how to collect this 'Impulse's into an array for querying about shortest paths can be found in the @test@ program found in
+this package.
+
+While shortest paths search is lasting, information about suboptimal paths is already available. This algorithm also allows effective
+incremental search after graph topology changes (new nodes are added or removed, weights are changed) but this is not yet implemented.
+-}
 shortestPaths :: (DynGraph gr, Show a, Data a, Data b, Real b, Bounded b) => gr a b -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
 shortestPaths = ufoldM' growGraph M.empty
 
@@ -43,6 +62,12 @@ growGraph (inn, node, label, out) nodes = do
 
 -- TODO: Also make functions to manipulate graph
 -- TODO: We have to send TopologyChange to all nodes because currently it is not propagated correctly around (just along inbound edges, but it should along all)
+{-|
+Inform nodes that topology has changed (new nodes have been added or removed, weights changed).
+
+Currently it should only be invoked after the data-flow graph structure has been built (for example with 'shortestPaths'). As
+graph topology changing interface (and thus incremental nature of algorithms) is not yet implemented.
+-}
 sendTopologyChange :: M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive) -> Incubation ()
 sendTopologyChange nodes = liftIO $ do
   time <- getCurrentImpulseTime
@@ -67,14 +92,15 @@ data GraphImpulse a b = TopologyUpdate {
     originator :: LNode a,
     destination :: LNode a,
     path :: SPath b
-  } |
-  TopologyChange {
+  } -- ^ Informs nodes about possible improvement in the topology information, like a newly discovered shortest path.
+  | TopologyChange {
     impulseTimestamp :: ImpulseTime
-  } |
-  AddOutEdges {
+  } -- ^ Informs nodes that topology has changed and the algorithm should be triggered (again).
+  | AddOutEdges {
     impulseTimestamp :: ImpulseTime,
     newOutEdges :: Adj b
-  } deriving (Eq, Ord, Show, Typeable, Data)
+  } -- ^ Inform the node that new outbound edges have been 'attach'ed to it, giving the node their weights.
+  deriving (Eq, Ord, Show, Typeable, Data)
 
 instance (Show a, Typeable a, Show b, Typeable b, Real b, Bounded b) => Impulse (GraphImpulse a b) where
   impulseTime TopologyUpdate { impulseTimestamp } = impulseTimestamp

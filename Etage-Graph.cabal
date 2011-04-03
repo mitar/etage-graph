@@ -1,7 +1,14 @@
 Name:                Etage-Graph
 Version:             0.1
-Synopsis:            A data-flow based graph algorithms
-Description:         A data-flow based graph algorithms.
+Synopsis:            Data-flow based graph algorithms
+Description:         Data-flow based graph algorithms using the "Control.Etage" framework, showcasing its use for data-flow
+                     computations. It is meant to be used with the "Data.Graph.Inductive" package which provides graph structures
+                     these algorithms take as an input.
+                     .
+                     Currently only the shortest paths computation is implemented (from all to all nodes).
+                     .
+                     Also a benchmarking @test@ program is provided, comparing the performance with algorithms found in the
+                     "Data.Graph.Inductive" package.
 License:             LGPL-3
 License-file:        LICENSE
 Author:              Mitar Milutinovic
