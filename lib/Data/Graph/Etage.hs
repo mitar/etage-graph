@@ -103,6 +103,7 @@ instance (Show a, Data a, Show b, Data b, Real b, Bounded b) => Neuron (NodeNeur
 
 run :: (Data b, Real b, Bounded b) => Nerve (GraphImpulse a b) fromConductivity (GraphImpulse a b) forConductivity -> NodeNeuron a b -> NodeIO a b ()
 run nerve (NodeNeuron node label) = forever $ do
+  -- TODO: We could process multiple impulses at the same time, so that we do not send out updates for paths where better paths are already queued for us
   impulse <- liftIO $ getForNeuron nerve
   case impulse of
     TopologyChange { impulseTimestamp } -> do

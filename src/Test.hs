@@ -1,26 +1,31 @@
-{-# LANGUAGE TypeFamilies, DeriveDataTypeable, NamedFieldPuns, BangPatterns #-}
+{-# LANGUAGE TypeFamilies, ScopedTypeVariables, DeriveDataTypeable, NamedFieldPuns, BangPatterns #-}
 
 module Main (
   main
 ) where
 
 import Control.Applicative
-import Control.Monad
 import Control.DeepSeq
 import Control.Exception
+import Control.Monad
+import Control.Monad.ST
+import Data.Array hiding (elems)
+import Data.Array.ST
 import Data.Data
 import Data.Graph.Etage
 import Data.Graph.Inductive hiding (edges, defaultGraphSize)
-import Data.List
 import qualified Data.Map as M
-import Data.Map hiding (filter, map, empty, null, lookup, insert)
+import Data.List
 import Data.Maybe
+import Data.Ratio
 import Data.Time.Clock.POSIX
+import GHC.Arr
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
-import System.Random
 import System.IO
+import System.Random
+import System.Timeout
 import Text.Printf
 
 import Control.Etage
@@ -28,15 +33,21 @@ import Control.Etage
 defaultGraphSize :: Int
 defaultGraphSize = 6
 
+minCollectTimeout :: Int
+minCollectTimeout = 100000 -- microseconds
+
+initialCollectTimeout :: Int
+initialCollectTimeout = 1000000 -- microseconds
+
 data Option = InputGraph String | OutputGraph String | OutputDot String | GraphSize Int | Help deriving (Eq, Show)
 
 options :: [OptDescr Option]
 options = [
-    Option ['g'] ["graph"]  (ReqArg InputGraph "filename")             "read graph grom a file, default is to generate one randomly",
-    Option ['o'] ["output"] (ReqArg OutputGraph "filename")            "save graph to a file",
-    Option ['d'] ["dot"]    (ReqArg OutputDot "filename")              "save graph to a file in a GraphViz format",
-    Option ['s'] ["size"]   (ReqArg (GraphSize . readParam) "number")  ("size of the randomly generated graph, default is " ++ (show defaultGraphSize)),
-    Option ['h'] ["help"]   (NoArg Help)                               "show this help"
+    Option ['g'] ["graph"]  (ReqArg InputGraph "filename")            "read graph grom a file, default is to generate one randomly",
+    Option ['o'] ["output"] (ReqArg OutputGraph "filename")           "save graph to a file",
+    Option ['d'] ["dot"]    (ReqArg OutputDot "filename")             "save graph to a file in a GraphViz format",
+    Option ['s'] ["size"]   (ReqArg (GraphSize . readParam) "number") ("size of the randomly generated graph, default is " ++ (show defaultGraphSize)),
+    Option ['h'] ["help"]   (NoArg Help)                              "show this help"
   ]
     where readParam param = case reads param of
                               [(p,[])] -> if p < 1
@@ -72,44 +83,52 @@ generateGraph graphSize = do
     return $ zip3 (repeat node) others weights
   return $ mkGraph ns edges
 
-data TestNeuron a b = TestNeuron (Map (Node, Node) (b, [Node])) deriving (Typeable)
+data TestNeuron a b = TestNeuron Int (Array (Node, Node) (b, [Node])) deriving (Typeable)
 
 instance (Show a, Data a, Show b, Data b, Real b, Bounded b, NFData b) => Neuron (TestNeuron a b) where
   type NeuronFromImpulse (TestNeuron a b) = NoImpulse
   type NeuronForImpulse (TestNeuron a b) = GraphImpulse a b
   data NeuronOptions (TestNeuron a b) = NodeOptions {
-      knownPaths :: Map (Node, Node) (b, [Node])
+      graphSize :: Int,
+      knownPaths :: Array (Node, Node) (b, [Node])
     }
 
   mkDefaultOptions = return NodeOptions {
+      graphSize = undefined,
       knownPaths = undefined
     }
 
-  grow NodeOptions { knownPaths } = return $ TestNeuron knownPaths
+  grow NodeOptions { graphSize, knownPaths } = return $ TestNeuron graphSize knownPaths
   
-  live nerve (TestNeuron knownPaths) = do
+  live nerve (TestNeuron graphSize knownPaths) = do
     before <- getPOSIXTime
-    waitAndTest M.empty before
-      where waitAndTest currentPaths before = do
-              impulse <- getForNeuron nerve
+    pathsLazy <- stToIO $ newArray ((1, 1), (graphSize, graphSize)) (maxBound, [])
+    collectTimeout <- collectPaths initialCollectTimeout pathsLazy
+    pathsLazy' <- stToIO $ unsafeFreezeSTArray pathsLazy
+    let !paths = pathsLazy' `deepseq` pathsLazy'
+    after <- getPOSIXTime
+    putStrLn $ "Etage search time for shortest paths: " ++ (show $ after - before - (fromRational $ (fromIntegral collectTimeout) % 1000000)) ++ " (" ++ (printf "%fs" $ (fromIntegral collectTimeout :: Double) / 1000000) ++ " timeout)" -- we correct for the last timeout
+    let paths'      = M.fromList $ assocs paths
+        knownPaths' = M.fromList $ assocs knownPaths
+        shortest    = (fromIntegral . sum . map fromEnum . M.elems $ M.intersectionWith (\(l, p) (l', p') -> l == l' && p == p') knownPaths' paths') / (fromIntegral $ M.size knownPaths') :: Float
+    putStrLn $ "Found " ++ (printf "%.2f %%" (shortest * 100)) ++ " shortest paths."
+    dissolving ()
+      where collectPaths :: Int -> STArray RealWorld (Node, Node) (b, [Node]) -> IO Int
+            collectPaths collectTimeout arr = do
+              before <- getPOSIXTime
+              impulse <- timeout collectTimeout $ getForNeuron nerve
               case impulse of
-                TopologyChange {}                                                 -> waitAndTest currentPaths before
-                AddOutEdges {}                                                    -> waitAndTest currentPaths before
-                TopologyUpdate { destination = (node, _), path = (LP path, len) } -> do
-                  let sourceNode = fst . head $ path
-                      currentPaths' = M.insert (sourceNode, node) (len, map fst path) currentPaths
-                      found = (fromIntegral $ size currentPaths) / (fromIntegral $ size knownPaths) :: Float
-                      found' = (fromIntegral $ size currentPaths') / (fromIntegral $ size knownPaths) :: Float
-                      shortest = (fromIntegral . sum . map fromEnum . elems $ intersectionWith (\(l, p) (l', p') -> l == l' && p == p') knownPaths currentPaths') / (fromIntegral $ size knownPaths) :: Float
-                  putStrLn $ "Found " ++ (printf "%.2f %%" (found' * 100)) ++ " paths and of those " ++ (printf "%.2f %%" (shortest * 100)) ++ " shortest."
-                  when (found' == 1.0 && found' > found) $ do
-                    after <- getPOSIXTime
-                    putStrLn $ "Etage search time for suboptimal paths: " ++ (show $ after - before)
-                  when (shortest == 1.0) $ do
-                    after <- getPOSIXTime
-                    putStrLn $ "Etage search time for shortest paths: " ++ (show $ after - before)
-                    dissolving currentPaths'
-                  waitAndTest currentPaths' before
+                Nothing -> return collectTimeout
+                Just i  -> do
+                  let timestamp       = impulseTimestamp i
+                      collectTimeout' = max (round $ (timestamp - before) * 2 * 1000000) minCollectTimeout
+                  case i of
+                    TopologyChange {}                                                 -> collectPaths collectTimeout' arr
+                    AddOutEdges {}                                                    -> collectPaths collectTimeout' arr
+                    TopologyUpdate { destination = (node, _), path = (LP path, len) } -> do
+                      let sourceNode = fst . head $ path
+                      stToIO $ writeArray arr (sourceNode, node) (len, map fst path)
+                      collectPaths collectTimeout' arr
 
 main :: IO ()
 main = do
@@ -156,18 +175,28 @@ main = do
   putStrLn $ "Graph contains " ++ (show graphSize) ++ " nodes."
   
   before <- getPOSIXTime
-  let pathsLazy = fromList . concatMap (\sourceNode -> map (\(LP (n@(node, len):ns)) -> ((sourceNode, node), (len, reverse . map fst $ n:ns))) $ spTree sourceNode graph) $ nodes graph
-      !paths = pathsLazy `deepseq` pathsLazy
+  let lazyPaths = dijkstraShortestPaths graph graphSize
+      !paths    = lazyPaths `deepseq` lazyPaths
   after <- getPOSIXTime
   putStrLn $ "Dijkstra search time for shortest paths: " ++ (show $ after - before)
   
   incubate $ do
-    nerveTest <- (growNeuron :: NerveOnlyFor (TestNeuron String Double)) (\o -> o { knownPaths = paths })
+    nerveTest <- (growNeuron :: NerveOnlyFor (TestNeuron String Double)) (\o -> o { graphSize, knownPaths = paths })
     pathsNerves <- shortestPaths graph
     
-    mapM_ (`attachTo` [TranslatableFor nerveTest]) $ elems pathsNerves
+    mapM_ (`attachTo` [TranslatableFor nerveTest]) $ M.elems pathsNerves
     
     sendTopologyChange pathsNerves
 
 forceStrictGraph :: (NFData a, NFData b, Graph gr) => gr a b -> IO ()
 forceStrictGraph g = labNodes g `deepseq` labEdges g `deepseq` return ()
+
+dijkstraShortestPaths :: forall gr a b. (Graph gr, Bounded b, Real b) => gr a b -> Int -> Array (Node, Node) (b, [Node])
+dijkstraShortestPaths graph graphSize = runSTArray buildPaths
+  where buildPaths :: ST s (STArray s (Node, Node) (b, [Node]))
+        buildPaths = do
+          arr <- newArray ((1, 1), (graphSize, graphSize)) (maxBound, [])
+          forM_ (nodes graph) $ \sourceNode ->
+            forM_ (spTree sourceNode graph) $ \(LP (n@(node, len):ns)) ->
+              writeArray arr (sourceNode, node) (len, reverse . map fst $ n:ns)
+          return arr
