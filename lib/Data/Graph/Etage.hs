@@ -21,7 +21,7 @@ type SPath b = (LPath b, b)
 type SPaths a b = M.Map Node (a, SPath b) -- node is destination, last element of SPath
 
 shortestPaths :: (DynGraph gr, Show a, Data a, Data b, Real b, Bounded b) => gr a b -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
-shortestPaths graph = ufoldM' growGraph M.empty graph
+shortestPaths = ufoldM' growGraph M.empty
 
 growGraph :: forall a b. (Show a, Data a, Data b, Real b, Bounded b) => Context a b -> M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive) -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
 growGraph (inn, node, label, out) nodes = do
@@ -38,8 +38,8 @@ growGraph (inn, node, label, out) nodes = do
     unless (null out') $ sendForNeuron nodeNerve $ AddOutEdges time out'
     mapM_ (\(l, n) -> sendForNeuron (nodes ! n) $ AddOutEdges time [(l, node)]) inn'
   return $ insert node nodeNerve nodes
-    where inn' = filter ((node /=) . snd) $ inn -- we ignore loopbacks
-          out' = filter ((node /=) . snd) $ out -- we ignore loopbacks
+    where inn' = filter ((node /=) . snd) inn -- we ignore loopbacks
+          out' = filter ((node /=) . snd) out -- we ignore loopbacks
 
 -- TODO: Also make functions to manipulate graph
 -- TODO: We have to send TopologyChange to all nodes because currently it is not propagated correctly around (just along inbound edges, but it should along all)
@@ -80,7 +80,7 @@ instance (Show a, Typeable a, Show b, Typeable b, Real b, Bounded b) => Impulse 
   impulseTime TopologyUpdate { impulseTimestamp } = impulseTimestamp
   impulseTime TopologyChange { impulseTimestamp } = impulseTimestamp
   impulseTime AddOutEdges { impulseTimestamp } = impulseTimestamp
-  impulseValue TopologyUpdate { originator, path } = (toRational o) : (value . fst $ path)
+  impulseValue TopologyUpdate { originator, path } = toRational o : (value . fst $ path)
     where (o, _) = originator
           value (LP p) = concatMap (\(n, l) -> [toRational n, toRational l]) p
   impulseValue TopologyChange {} = []
@@ -115,15 +115,15 @@ run nerve (NodeNeuron node label) = forever $ do
           sendFromNeuron nerve impulse
           t <- liftIO getCurrentImpulseTime
           -- TODO: TopologyChange should be propagated correctly (along all edges and not just along inbound edges, as it is now)
-          forM_ (toList paths) $ \(n, (l, p)) -> do
-            sendFromNeuron nerve $ TopologyUpdate { impulseTimestamp = t, originator = (node, label), destination = (n, l), path = p }
+          forM_ (toList paths) $ \(n, (l, p)) ->
+            sendFromNeuron nerve TopologyUpdate { impulseTimestamp = t, originator = (node, label), destination = (n, l), path = p }
     TopologyUpdate { impulseTimestamp, originator = (o, _), destination = (d, l), path = (LP path, cost) } -> do
       liftIO $ do
         assertIO $ abs (cost - (sum . map snd $ path)) * 100000 < 1 -- we have to do compare it like that to account for approximate nature of float values
         assertIO $ (fst . last $ path) == d
       out <- gets outedges
       case M.lookup o out of
-        Nothing    -> liftIO $ hPutStrLn stderr $ "Warning: TopologyUpdate message arrived before AddOutEdges message."
+        Nothing    -> liftIO $ hPutStrLn stderr "Warning: TopologyUpdate message arrived before AddOutEdges message."
         Just ocost -> do
           paths <- gets currentPaths
           let (_, (_, c)) = findWithDefault (undefined, (undefined, maxBound)) d paths

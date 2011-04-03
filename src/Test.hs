@@ -43,11 +43,11 @@ data Option = InputGraph String | OutputGraph String | OutputDot String | GraphS
 
 options :: [OptDescr Option]
 options = [
-    Option ['g'] ["graph"]  (ReqArg InputGraph "filename")            "read graph grom a file, default is to generate one randomly",
-    Option ['o'] ["output"] (ReqArg OutputGraph "filename")           "save graph to a file",
-    Option ['d'] ["dot"]    (ReqArg OutputDot "filename")             "save graph to a file in a GraphViz format",
-    Option ['s'] ["size"]   (ReqArg (GraphSize . readParam) "number") ("size of the randomly generated graph, default is " ++ (show defaultGraphSize)),
-    Option ['h'] ["help"]   (NoArg Help)                              "show this help"
+    Option "g" ["graph"]  (ReqArg InputGraph "filename")            "read graph grom a file, default is to generate one randomly",
+    Option "o" ["output"] (ReqArg OutputGraph "filename")           "save graph to a file",
+    Option "d" ["dot"]    (ReqArg OutputDot "filename")             "save graph to a file in a GraphViz format",
+    Option "s" ["size"]   (ReqArg (GraphSize . readParam) "number") ("size of the randomly generated graph, default is " ++ show defaultGraphSize),
+    Option "h" ["help"]   (NoArg Help)                              "show this help"
   ]
     where readParam param = case reads param of
                               [(p,[])] -> if p < 1
@@ -107,11 +107,11 @@ instance (Show a, Data a, Show b, Data b, Real b, Bounded b, NFData b) => Neuron
     pathsLazy' <- stToIO $ unsafeFreezeSTArray pathsLazy
     let !paths = pathsLazy' `deepseq` pathsLazy'
     after <- getPOSIXTime
-    putStrLn $ "Etage search time for shortest paths: " ++ (show $ after - before - (fromRational $ (fromIntegral collectTimeout) % 1000000)) ++ " (" ++ (printf "%fs" $ (fromIntegral collectTimeout :: Double) / 1000000) ++ " timeout)" -- we correct for the last timeout
+    putStrLn $ "Etage search time for shortest paths: " ++ show (after - before - fromRational (fromIntegral collectTimeout % 1000000)) ++ " (" ++ printf "%fs" ((fromIntegral collectTimeout :: Double) / 1000000) ++ " timeout)" -- we correct for the last timeout
     let paths'      = M.fromList $ assocs paths
         knownPaths' = M.fromList $ assocs knownPaths
-        shortest    = (fromIntegral . sum . map fromEnum . M.elems $ M.intersectionWith (\(l, p) (l', p') -> l == l' && p == p') knownPaths' paths') / (fromIntegral $ M.size knownPaths') :: Float
-    putStrLn $ "Found " ++ (printf "%.2f %%" (shortest * 100)) ++ " shortest paths."
+        shortest    = (fromIntegral . sum . map fromEnum . M.elems $ M.intersectionWith (\(l, p) (l', p') -> l == l' && p == p') knownPaths' paths') / fromIntegral (M.size knownPaths') :: Float
+    putStrLn $ "Found " ++ printf "%.2f %%" (shortest * 100) ++ " shortest paths."
     dissolving ()
       where collectPaths :: Int -> STArray RealWorld (Node, Node) (b, [Node]) -> IO Int
             collectPaths collectTimeout arr = do
@@ -121,8 +121,8 @@ instance (Show a, Data a, Show b, Data b, Real b, Bounded b, NFData b) => Neuron
                 Nothing -> return collectTimeout
                 Just i  -> do
                   let timestamp       = impulseTimestamp i
-                      -- TODO: Improve timeout handling.
-                      collectTimeout' = max ((collectTimeout + (round $ (timestamp - before) * 2 * 1000000)) `div` 2) minCollectTimeout
+                      -- TODO: Improve timeout handling. Timeout only after the first TopologyChange?
+                      collectTimeout' = max ((collectTimeout + round ((timestamp - before) * 2 * 1000000)) `div` 2) minCollectTimeout
                   case i of
                     TopologyChange {}                                                 -> collectPaths collectTimeout' arr
                     AddOutEdges {}                                                    -> collectPaths collectTimeout' arr
@@ -150,13 +150,13 @@ main = do
                           Just (InputGraph inputGraph) -> do
                             when (any isGraphSize opts) $ throwIO $ ErrorCall $ "conflicting options `" ++ "--graph" ++ "' and `" ++ "--size" ++ "'"
                             putStrLn $ "Reading graph from \"" ++ inputGraph ++ "\"."
-                            [line1, line2] <- lines <$> (readFile inputGraph)
+                            [line1, line2] <- lines <$> readFile inputGraph
                             let g = mkGraph (read line1) (read line2)
                             forceStrictGraph g
                             return (g, noNodes g)
                           _                            -> do
                             let GraphSize s = fromMaybe (GraphSize defaultGraphSize) $ find isGraphSize opts
-                            putStrLn $ "Generating a random graph of size " ++ (show s) ++ "."
+                            putStrLn $ "Generating a random graph of size " ++ show s ++ "."
                             g <- generateGraph s
                             forceStrictGraph g
                             return (g, s)
@@ -173,14 +173,14 @@ main = do
       writeFile outputDot $ graphviz graph "Etage" (8.27, 11.69) (1, 1) Landscape
     _                          -> return ()
   
-  putStrLn $ "Graph contains " ++ (show graphSize) ++ " nodes."
+  putStrLn $ "Graph contains " ++ show graphSize ++ " nodes."
   
   before <- getPOSIXTime
   let lazyPaths = dijkstraShortestPaths graph graphSize
       !paths    = lazyPaths `deepseq` lazyPaths
   after <- getPOSIXTime
-  putStrLn $ "Dijkstra search time for shortest paths: " ++ (show $ after - before)
-  
+  putStrLn $ "Dijkstra search time for shortest paths: " ++ show (after - before)
+
   incubate $ do
     nerveTest <- (growNeuron :: NerveOnlyFor (TestNeuron String Double)) (\o -> o { graphSize, knownPaths = paths })
     pathsNerves <- shortestPaths graph
