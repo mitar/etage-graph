@@ -34,10 +34,10 @@ defaultGraphSize :: Int
 defaultGraphSize = 6
 
 minCollectTimeout :: Int
-minCollectTimeout = 100000 -- microseconds
+minCollectTimeout = 500000 -- microseconds
 
 initialCollectTimeout :: Int
-initialCollectTimeout = 1000000 -- microseconds
+initialCollectTimeout = 5000000 -- microseconds
 
 data Option = InputGraph String | OutputGraph String | OutputDot String | GraphSize Int | Help deriving (Eq, Show)
 
@@ -121,7 +121,8 @@ instance (Show a, Data a, Show b, Data b, Real b, Bounded b, NFData b) => Neuron
                 Nothing -> return collectTimeout
                 Just i  -> do
                   let timestamp       = impulseTimestamp i
-                      collectTimeout' = max (round $ (timestamp - before) * 2 * 1000000) minCollectTimeout
+                      -- TODO: Improve timeout handling.
+                      collectTimeout' = max ((collectTimeout + (round $ (timestamp - before) * 2 * 1000000)) `div` 2) minCollectTimeout
                   case i of
                     TopologyChange {}                                                 -> collectPaths collectTimeout' arr
                     AddOutEdges {}                                                    -> collectPaths collectTimeout' arr
