@@ -9,6 +9,7 @@ import Control.DeepSeq
 import Control.Exception
 import Control.Monad
 import Control.Monad.ST
+import Control.Parallel.Strategies
 import Data.Array hiding (elems)
 import Data.Array.ST
 import Data.Data
@@ -20,6 +21,7 @@ import Data.Maybe
 import Data.Ratio
 import Data.Time.Clock.POSIX
 import GHC.Arr
+import GHC.Conc
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
@@ -105,7 +107,7 @@ instance (Show a, Data a, Show b, Data b, Real b, Bounded b, NFData b) => Neuron
     pathsLazy <- stToIO $ newArray ((1, 1), (graphSize, graphSize)) (maxBound, [])
     collectTimeout <- collectPaths initialCollectTimeout pathsLazy
     pathsLazy' <- stToIO $ unsafeFreezeSTArray pathsLazy
-    let !paths = pathsLazy' `deepseq` pathsLazy'
+    let !paths = pathsLazy' `using` evalTraversable rdeepseq
     after <- getPOSIXTime
     putStrLn $ "Etage search time for shortest paths: " ++ show (after - before - fromRational (fromIntegral collectTimeout % 1000000)) ++ " (" ++ printf "%fs" ((fromIntegral collectTimeout :: Double) / 1000000) ++ " timeout)" -- we correct for the last timeout
     let paths'      = M.fromList $ assocs paths
@@ -176,8 +178,7 @@ main = do
   putStrLn $ "Graph contains " ++ show graphSize ++ " nodes."
   
   before <- getPOSIXTime
-  let lazyPaths = dijkstraShortestPaths graph graphSize
-      !paths    = lazyPaths `deepseq` lazyPaths
+  let !paths = dijkstraShortestPaths graph graphSize `using` evalTraversable rdeepseq
   after <- getPOSIXTime
   putStrLn $ "Dijkstra search time for shortest paths: " ++ show (after - before)
 
@@ -192,12 +193,8 @@ main = do
 forceStrictGraph :: (NFData a, NFData b, Graph gr) => gr a b -> IO ()
 forceStrictGraph g = labNodes g `deepseq` labEdges g `deepseq` return ()
 
-dijkstraShortestPaths :: forall gr a b. (Graph gr, Bounded b, Real b) => gr a b -> Int -> Array (Node, Node) (b, [Node])
-dijkstraShortestPaths graph graphSize = runSTArray buildPaths
-  where buildPaths :: ST s (STArray s (Node, Node) (b, [Node]))
-        buildPaths = do
-          arr <- newArray ((1, 1), (graphSize, graphSize)) (maxBound, [])
-          forM_ (nodes graph) $ \sourceNode ->
-            forM_ (spTree sourceNode graph) $ \(LP (n@(node, len):ns)) ->
-              writeArray arr (sourceNode, node) (len, reverse . map fst $ n:ns)
-          return arr
+dijkstraShortestPaths :: (Graph gr, Bounded b, Real b, NFData b) => gr a b -> Int -> Array (Node, Node) (b, [Node])
+dijkstraShortestPaths graph graphSize = array ((1, 1), (graphSize, graphSize)) $ initialValues ++ concat pathsValues
+  where initialValues           = [ ((i, j), (maxBound, [])) | i <- [1..graphSize], j <- [1..graphSize] ]
+        pathsValues             = map spFromSource (nodes graph) `using` parListChunk (noNodes graph `div` (numCapabilities * 10)) rdeepseq
+        spFromSource sourceNode = map (\(LP (n@(node, len):ns)) -> ((sourceNode, node), (len, reverse . map fst $ n:ns))) $ spTree sourceNode graph

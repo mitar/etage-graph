@@ -1,5 +1,5 @@
 Name:                Etage-Graph
-Version:             0.1
+Version:             0.1.1
 Synopsis:            Data-flow based graph algorithms
 Description:         Data-flow based graph algorithms using the "Control.Etage" framework, showcasing its use for data-flow
                      computations. It is meant to be used with the "Data.Graph.Inductive" package which provides graph structures
@@ -32,7 +32,7 @@ Library
   GHC-prof-options:    -Wall
   GHC-shared-options:  -Wall
 
-Executable test
+Executable etage-graph-test
   Main-is:             Test.hs
   HS-source-dirs:      src
   Build-depends:       base >= 4.3 && < 5,
@@ -42,6 +42,7 @@ Executable test
                        deepseq >= 1.1 && < 2,
                        array >= 0.3 && < 1,
                        time >= 1.1 && < 2,
+                       parallel >= 3.1 && < 4,
                        Etage == 0.1.8,
-                       Etage-Graph == 0.1
+                       Etage-Graph == 0.1.1
   GHC-options:         -Wall -rtsopts -threaded
