@@ -184,6 +184,7 @@ main = do
 
   incubate $ do
     nerveTest <- (growNeuron :: NerveOnlyFor (TestNeuron String Double)) (\o -> o { graphSize, knownPaths = paths })
+    -- TODO: Also measure network growing time
     pathsNerves <- shortestPaths graph
     
     mapM_ (`attachTo` [TranslatableFor nerveTest]) $ M.elems pathsNerves
