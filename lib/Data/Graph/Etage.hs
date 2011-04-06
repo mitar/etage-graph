@@ -106,11 +106,11 @@ instance (Show a, Typeable a, Show b, Typeable b, Real b, Bounded b) => Impulse 
   impulseTime TopologyUpdate { impulseTimestamp } = impulseTimestamp
   impulseTime TopologyChange { impulseTimestamp } = impulseTimestamp
   impulseTime AddOutEdges { impulseTimestamp } = impulseTimestamp
-  impulseValue TopologyUpdate { originator, path } = toRational o : (value . fst $ path)
-    where (o, _) = originator
-          value (LP p) = concatMap (\(n, l) -> [toRational n, toRational l]) p
+  impulseValue TopologyUpdate { originator = (o, _), path } = toRational o : (value . fst $ path)
+    where value (LP p) = concatMap (\(n, l) -> [toRational n, toRational l]) p
   impulseValue TopologyChange {} = []
-  impulseValue AddOutEdges { newOutEdges } = concatMap (\(l, n) -> [toRational l, toRational n]) newOutEdges
+  impulseValue AddOutEdges { newOutEdges } = concatMap value newOutEdges
+    where value (l, n) = [toRational l, toRational n]
 
 instance (Show a, Data a, Show b, Data b, Real b, Bounded b) => Neuron (NodeNeuron a b) where
   type NeuronFromImpulse (NodeNeuron a b) = GraphImpulse a b
