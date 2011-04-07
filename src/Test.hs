@@ -9,12 +9,13 @@ import Control.DeepSeq
 import Control.Exception
 import Control.Monad
 import Control.Monad.ST
+import Control.Monad.Trans
 import Control.Parallel.Strategies
 import Data.Array hiding (elems)
 import Data.Array.ST
 import Data.Data
 import Data.Graph.Etage
-import Data.Graph.Inductive hiding (edges, defaultGraphSize)
+import Data.Graph.Inductive hiding (defaultGraphSize)
 import qualified Data.Map as M
 import Data.List
 import Data.Maybe
@@ -77,13 +78,13 @@ generateGraph :: Int -> IO (Gr String Double)
 generateGraph graphSize = do
   when (graphSize < 1) $ throwIO $ AssertionFailed $ "Graph size out of bounds " ++ show graphSize
   let ns = map (\n -> (n, show n)) [1..graphSize]
-  edges <- fmap concat $ forM [1..graphSize] $ \node -> do
+  es <- fmap concat $ forM [1..graphSize] $ \node -> do
     nedges <- randomRIO (0, graphSize)
     others <- fmap (filter (node /=) . nub) $ forM [1..nedges] $ \_ -> randomRIO (1, graphSize)
     gen <- getStdGen
     let weights = randomRs (1, 10) gen
     return $ zip3 (repeat node) others weights
-  return $ mkGraph ns edges
+  return $ mkGraph ns es
 
 data TestNeuron a b = TestNeuron Int (Array (Node, Node) (b, [Node])) deriving (Typeable)
 
@@ -175,7 +176,7 @@ main = do
       writeFile outputDot $ graphviz graph "Etage" (8.27, 11.69) (1, 1) Landscape
     _                          -> return ()
   
-  putStrLn $ "Graph contains " ++ show graphSize ++ " nodes."
+  putStrLn $ "Graph contains " ++ show graphSize ++ " nodes and " ++ show (length . edges $ graph) ++ " edges."
   
   before <- getPOSIXTime
   let !paths = dijkstraShortestPaths graph graphSize `using` evalTraversable rdeepseq
@@ -184,8 +185,11 @@ main = do
 
   incubate $ do
     nerveTest <- (growNeuron :: NerveOnlyFor (TestNeuron String Double)) (\o -> o { graphSize, knownPaths = paths })
-    -- TODO: Also measure network growing time
+    before' <- liftIO getPOSIXTime
     pathsNerves <- shortestPaths graph
+    liftIO $ do
+      after' <- getPOSIXTime
+      putStrLn $ "Etage graph (external structure) growing time: " ++ show (after' - before')
     
     mapM_ (`attachTo` [TranslatableFor nerveTest]) $ M.elems pathsNerves
     

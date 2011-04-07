@@ -38,6 +38,7 @@ Executable etage-graph-test
   Build-depends:       base >= 4.3 && < 5,
                        fgl >= 5.4.2 && < 5.5,
                        random >= 1.0 && < 2,
+                       mtl >= 2.0 && < 3,
                        containers >= 0.4 && < 1,
                        deepseq >= 1.1 && < 2,
                        array >= 0.3 && < 1,
