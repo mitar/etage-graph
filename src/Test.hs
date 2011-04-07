@@ -197,5 +197,5 @@ forceStrictGraph g = labNodes g `deepseq` labEdges g `deepseq` return ()
 dijkstraShortestPaths :: (Graph gr, Bounded b, Real b, NFData b) => gr a b -> Int -> Array (Node, Node) (b, [Node])
 dijkstraShortestPaths graph graphSize = array ((1, 1), (graphSize, graphSize)) $ initialValues ++ concat pathsValues
   where initialValues           = [ ((i, j), (maxBound, [])) | i <- [1..graphSize], j <- [1..graphSize] ]
-        pathsValues             = map spFromSource (nodes graph) `using` parListChunk (noNodes graph `div` (numCapabilities * 10)) rdeepseq
+        pathsValues             = map spFromSource (nodes graph) `using` parListChunk (max 1 $ noNodes graph `div` (numCapabilities * 10)) rdeepseq
         spFromSource sourceNode = map (\(LP (n@(node, len):ns)) -> ((sourceNode, node), (len, reverse . map fst $ n:ns))) $ spTree sourceNode graph
