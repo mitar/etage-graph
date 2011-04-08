@@ -19,8 +19,9 @@ import Data.Graph.Inductive hiding (inn, inn', out, out', node', nodes, run)
 import qualified Data.Map as M
 import Data.Map hiding (filter, map, empty, null, lookup)
 import Data.Tuple
-import Control.Etage
 import System.IO
+
+import Control.Etage
 
 type SPath b = (LPath b, b)
 type SPaths a b = M.Map Node (a, SPath b) -- node is destination, last element of SPath

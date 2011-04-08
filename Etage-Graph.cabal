@@ -1,5 +1,5 @@
 Name:                Etage-Graph
-Version:             0.1.2
+Version:             0.1.3
 Synopsis:            Data-flow based graph algorithms
 Description:         Data-flow based graph algorithms using the "Control.Etage" framework, showcasing its use for data-flow
                      computations. It is meant to be used with the "Data.Graph.Inductive" package which provides graph structures
@@ -45,5 +45,6 @@ Executable etage-graph-test
                        time >= 1.1 && < 2,
                        parallel >= 3.1 && < 4,
                        Etage == 0.1.8,
-                       Etage-Graph == 0.1.2
+                       Etage-Graph == 0.1.3
+
   GHC-options:         -Wall -rtsopts -threaded
