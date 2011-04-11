@@ -81,8 +81,7 @@ generateGraph graphSize = do
   es <- fmap concat $ forM [1..graphSize] $ \node -> do
     nedges <- randomRIO (0, graphSize)
     others <- fmap (filter (node /=) . nub) $ forM [1..nedges] $ \_ -> randomRIO (1, graphSize)
-    gen <- getStdGen
-    let weights = randomRs (1, 10) gen
+    weights <- replicateM (length others) $ randomRIO (1, 10)
     return $ zip3 (repeat node) others weights
   return $ mkGraph ns es
 
