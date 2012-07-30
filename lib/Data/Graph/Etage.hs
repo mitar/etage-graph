@@ -17,7 +17,7 @@ import Control.Monad.State
 import Data.Data
 import Data.Graph.Inductive hiding (inn, inn', out, out', node', nodes, run)
 import qualified Data.Map as M
-import Data.Map hiding (filter, map, empty, null, lookup)
+import Data.Map hiding (filter, map, empty, null, lookup, foldl)
 import Data.Tuple
 import System.IO
 
@@ -40,10 +40,10 @@ this package.
 While shortest paths search is lasting, information about suboptimal paths is already available. This algorithm also allows effective
 incremental search after graph topology changes (new nodes are added or removed, weights are changed) but this is not yet implemented.
 -}
-shortestPaths :: (DynGraph gr, Show a, Data a, Data b, Real b, Bounded b) => gr a b -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
+shortestPaths :: (DynGraph gr, Show a, Show b, Data a, Data b, Real b, Bounded b) => gr a b -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
 shortestPaths = ufoldM' growGraph M.empty
 
-growGraph :: forall a b. (Show a, Data a, Data b, Real b, Bounded b) => Context a b -> M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive) -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
+growGraph :: forall a b. (Show a, Show b, Data a, Data b, Real b, Bounded b) => Context a b -> M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive) -> Incubation (M.Map Node (Nerve (GraphImpulse a b) AxonConductive (GraphImpulse a b) AxonConductive))
 growGraph (inn, node, label, out) nodes = do
   -- TODO: Sometimes nerve is not connected in both directions, how to fix memory leak then?
   liftIO $ do

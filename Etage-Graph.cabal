@@ -1,5 +1,5 @@
 Name:                Etage-Graph
-Version:             0.1.5
+Version:             0.1.6
 Synopsis:            Data-flow based graph algorithms
 Description:         Data-flow based graph algorithms using the "Control.Etage" framework, showcasing its use for data-flow
                      computations. It is meant to be used with the "Data.Graph.Inductive" package which provides graph structures
@@ -23,7 +23,7 @@ Homepage:            http://mitar.tnode.com
 Library
   Exposed-modules:     Data.Graph.Etage
   Build-depends:       base >= 4.3 && < 5,
-                       Etage >= 0.1.9 && < 0.2,
+                       Etage >= 0.1.10 && < 0.2,
                        fgl >= 5.4.2 && < 5.5,
                        mtl >= 2.0 && < 3,
                        containers >= 0.4 && < 1
@@ -48,7 +48,7 @@ Executable etage-graph-test
                        array >= 0.3 && < 1,
                        time >= 1.1 && < 2,
                        parallel >= 3.1 && < 4,
-                       Etage >= 0.1.9 && < 0.2,
-                       Etage-Graph == 0.1.5
+                       Etage >= 0.1.10 && < 0.2,
+                       Etage-Graph == 0.1.6
 
   GHC-options:         -Wall -rtsopts -threaded
