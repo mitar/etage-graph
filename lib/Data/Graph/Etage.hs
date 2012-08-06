@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables, TypeSynonymInstances, StandaloneDeriving, DeriveDataTypeable, NamedFieldPuns #-}
+{-# LANGUAGE TypeFamilies, MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables, TypeSynonymInstances, StandaloneDeriving, DeriveDataTypeable, NamedFieldPuns, CPP #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 {-|
@@ -17,7 +17,11 @@ import Control.Monad.State
 import Data.Data
 import Data.Graph.Inductive hiding (inn, inn', out, out', node', nodes, run)
 import qualified Data.Map as M
+#if MIN_VERSION_base(4,5,0)
 import Data.Map hiding (filter, map, empty, null, lookup, foldl)
+#else
+import Data.Map hiding (filter, map, empty, null, lookup)
+#endif
 import Data.Tuple
 import System.IO
 
