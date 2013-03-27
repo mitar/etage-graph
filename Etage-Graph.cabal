@@ -1,5 +1,5 @@
 Name:                Etage-Graph
-Version:             0.1.6
+Version:             0.1.7
 Synopsis:            Data-flow based graph algorithms
 Description:         Data-flow based graph algorithms using the "Control.Etage" framework, showcasing its use for data-flow
                      computations. It is meant to be used with the "Data.Graph.Inductive" package which provides graph structures
@@ -13,7 +13,7 @@ License:             LGPL-3
 License-file:        LICENSE
 Author:              Mitar Milutinovic
 Maintainer:          mitar.haskell@tnode.com
-Copyright:           (c) 2011-2012 Mitar Milutinovic
+Copyright:           (c) 2011-2013 Mitar Milutinovic
 Category:            Data Structures
 Build-type:          Simple
 Cabal-version:       >= 1.8
@@ -23,7 +23,7 @@ Homepage:            http://mitar.tnode.com
 Library
   Exposed-modules:     Data.Graph.Etage
   Build-depends:       base >= 4.3 && < 5,
-                       Etage >= 0.1.10 && < 0.2,
+                       Etage >= 0.1.11 && < 0.2,
                        fgl >= 5.4.2 && < 5.5,
                        mtl >= 2.0 && < 3,
                        containers >= 0.4 && < 1
@@ -33,8 +33,8 @@ Library
   GHC-shared-options:  -Wall
 
 Source-repository head
-  type:                mercurial
-  location:            https://bitbucket.org/mitar/etage-graph
+  type:                git
+  location:            git://github.com/mitar/etage-graph.git
 
 Executable etage-graph-test
   Main-is:             Test.hs
@@ -48,7 +48,7 @@ Executable etage-graph-test
                        array >= 0.3 && < 1,
                        time >= 1.1 && < 2,
                        parallel >= 3.1 && < 4,
-                       Etage >= 0.1.10 && < 0.2,
-                       Etage-Graph == 0.1.6
+                       Etage >= 0.1.11 && < 0.2,
+                       Etage-Graph == 0.1.7
 
   GHC-options:         -Wall -rtsopts -threaded
