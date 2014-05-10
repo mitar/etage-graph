@@ -1,5 +1,5 @@
 Name:                Etage-Graph
-Version:             0.1.7
+Version:             0.1.8
 Synopsis:            Data-flow based graph algorithms
 Description:         Data-flow based graph algorithms using the "Control.Etage" framework, showcasing its use for data-flow
                      computations. It is meant to be used with the "Data.Graph.Inductive" package which provides graph structures

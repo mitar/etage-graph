@@ -22,7 +22,6 @@ import Data.Map hiding (filter, map, empty, null, lookup, foldl)
 #else
 import Data.Map hiding (filter, map, empty, null, lookup)
 #endif
-import Data.Tuple
 import System.IO
 
 import Control.Etage

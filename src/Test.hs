@@ -26,7 +26,6 @@ import GHC.Conc
 import System.Console.GetOpt
 import System.Environment
 import System.Exit
-import System.IO
 import System.Random
 import System.Timeout
 import Text.Printf
